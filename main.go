@@ -7,19 +7,17 @@ import (
 	"log"
 	"os"
 	"regexp"
-
-	"common"
 )
 
 var (
-	helpFlag = flag.Bool("help", false, "Show this help")
+	helpFlag = flag.Bool("h", false, "Show this help")
 )
 
 func main() {
 	flag.Parse()
 
-	if flag.NArg() < 1 || *helpFlag {
-		println("`grep` <pattern> [<file>...]")
+	if flag.NArg() < 1 || *helpFlag || flag.Arg(0) == "-h" {
+		fmt.Println("`grep` <pattern> [<file>...]")
 		flag.PrintDefaults()
 		os.Exit(2)
 	}
@@ -45,11 +43,11 @@ func main() {
 	}
 }
 
-func doGrep(pattern *regexp.Regexp, fh io.Reader, fn string, print_fn bool) {
-	buf := common.NewBufferedReader(fh)
+func doGrep(pattern *regexp.Regexp, fh io.Reader, fn string, printFn bool) {
+	buf := make([]byte, 4096)
 
 	for {
-		line, err := buf.ReadWholeLine()
+		n, err := fh.Read(buf)
 		if err == io.EOF {
 			return
 		}
@@ -57,15 +55,36 @@ func doGrep(pattern *regexp.Regexp, fh io.Reader, fn string, print_fn bool) {
 			fmt.Fprintf(os.Stderr, "Error while reading from %s: %v\n", fn, err)
 			return
 		}
-		if line == "" {
+		if n == 0 {
 			continue
 		}
 
-		if pattern.MatchString(line) {
-			if print_fn {
-				fmt.Printf("%s:", fn)
+		lines := splitLines(buf[:n])
+		for _, line := range lines {
+			if pattern.MatchString(line) {
+				if printFn {
+					fmt.Printf("%s:", fn)
+				}
+				fmt.Printf("%s\n", line)
 			}
-			fmt.Printf("%s\n", line)
 		}
 	}
+}
+
+func splitLines(data []byte) []string {
+	var lines []string
+	start := 0
+
+	for i, b := range data {
+		if b == '\n' {
+			lines = append(lines, string(data[start:i]))
+			start = i + 1
+		}
+	}
+
+	if start < len(data) {
+		lines = append(lines, string(data[start:]))
+	}
+
+	return lines
 }
